@@ -1,0 +1,22 @@
+---
+source: src/macros.rs
+expression: map
+---
+{
+    "field_x": v(
+        ${(@1.1, 2): "Hello"},
+    ),
+    "field_y": v(
+        ${(@1.1, 3): "World"},
+    ),
+    "field_z": v(
+        {
+            "field_x": v(
+                ${(@1.1, 4): "Nested"},
+            ),
+            "field_y": v(
+                ${(@1.1, 5): "Nested"},
+            ),
+        },
+    ),
+}
