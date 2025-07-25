@@ -36,6 +36,8 @@ jobs:
         # enable this ci template to run regardless of whether the lockfile is checked in or not
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
+      - name: Install iai-callgrind-runner
+        run: ./.github/scripts/install_iai_callgrind_runner.sh
       # https://twitter.com/jonhoo/status/1571290371124260865
       - name: cargo test --locked
         run: cargo test --locked --all-features --all-targets
@@ -83,6 +85,8 @@ jobs:
         run: rustup default stable
       - name: cargo update -Zminimal-versions
         run: cargo +nightly update -Zminimal-versions
+      - name: Install iai-callgrind-runner
+        run: ./.github/scripts/install_iai_callgrind_runner.sh
       - name: cargo test
         run: cargo test --locked --all-features --all-targets
   os-check:
