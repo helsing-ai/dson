@@ -716,14 +716,14 @@ impl<S> DotStoreJoin<S> for NoExtensionTypes {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "json")]
 impl From<&'_ NoExtensionTypes> for serde_json::Value {
     fn from(_: &'_ NoExtensionTypes) -> Self {
         serde_json::Value::Null
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "json")]
 impl From<NoExtensionTypes> for serde_json::Value {
     fn from(_: NoExtensionTypes) -> Self {
         serde_json::Value::Null
