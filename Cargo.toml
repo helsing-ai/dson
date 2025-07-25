@@ -17,9 +17,9 @@ default = ["json", "chrono", "ulid"]
 ## Implements `quickcheck::Arbitrary` for CRDT types, useful for property-based testing.
 arbitrary = ["bimap", "quickcheck", "rand", "dep:chrono"]
 ## Enables serialization and deserialization of DSON CRDTs to and from `serde_json::Value`.
-json = ["serde", "dep:base64", "dep:serde_bytes", "dep:serde_json", "ulid/serde"]
+json = ["serde", "dep:base64", "dep:serde_bytes", "dep:serde_json"]
 ## Provides `serde` support for all CRDT types.
-serde = ["dep:serde", "dep:serde_bytes", "smallvec/serde"]
+serde = ["dep:serde", "dep:serde_bytes", "smallvec/serde", "ulid/serde"]
 ## Enables `chrono` support for `Timestamp`.
 chrono = ["dep:chrono"]
 ## Enables registers to hold ulids.

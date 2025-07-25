@@ -136,7 +136,7 @@ impl fmt::Debug for Timestamp {
     }
 }
 
-#[cfg(all(feature = "serde", feature = "chrono"))]
+#[cfg(all(feature = "json", feature = "chrono"))]
 impl From<Timestamp> for serde_json::Value {
     // The string is formatted according to RFC 3339 with millisecond precision.
     fn from(value: Timestamp) -> Self {
