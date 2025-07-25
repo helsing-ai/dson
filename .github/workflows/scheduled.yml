@@ -29,6 +29,8 @@ jobs:
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
+      - name: Install Valgrind
+        run: sudo apt update && sudo apt install valgrind
       - uses: cargo-bins/cargo-binstall@main
       - name: Install iai-callgrind-runner
         run: ./.github/scripts/install_iai_callgrind_runner.sh
@@ -58,7 +60,11 @@ jobs:
       - name: cargo update
         if: hashFiles('Cargo.lock') != ''
         run: cargo update
+      - name: Install Valgrind
+        run: sudo apt update && sudo apt install valgrind
       - uses: cargo-bins/cargo-binstall@main
+      - name: Install Valgrind
+        run: sudo apt update && sudo apt install valgrind
       - name: Install iai-callgrind-runner
         run: ./.github/scripts/install_iai_callgrind_runner.sh
       - name: cargo test
