@@ -29,6 +29,7 @@ jobs:
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install iai-callgrind-runner
         run: ./.github/scripts/install_iai_callgrind_runner.sh
       - name: cargo test --locked
@@ -57,6 +58,7 @@ jobs:
       - name: cargo update
         if: hashFiles('Cargo.lock') != ''
         run: cargo update
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install iai-callgrind-runner
         run: ./.github/scripts/install_iai_callgrind_runner.sh
       - name: cargo test
