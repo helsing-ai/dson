@@ -29,6 +29,8 @@ jobs:
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
+      - name: Install iai-callgrind-runner
+        run: ./.github/scripts/install_iai_callgrind_runner.sh
       - name: cargo test --locked
         run: cargo test --locked --all-features --all-targets
   # https://twitter.com/alcuadrado/status/1571291687837732873
@@ -55,6 +57,8 @@ jobs:
       - name: cargo update
         if: hashFiles('Cargo.lock') != ''
         run: cargo update
+      - name: Install iai-callgrind-runner
+        run: ./.github/scripts/install_iai_callgrind_runner.sh
       - name: cargo test
         if: hashFiles('Cargo.lock') != ''
         run: cargo test --locked --all-features --all-targets
