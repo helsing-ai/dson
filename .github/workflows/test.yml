@@ -36,6 +36,8 @@ jobs:
         # enable this ci template to run regardless of whether the lockfile is checked in or not
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
+      - name: Install Valgrind
+        run: sudo apt update && sudo apt install valgrind
       - uses: cargo-bins/cargo-binstall@main
       - name: Install iai-callgrind-runner
         run: ./.github/scripts/install_iai_callgrind_runner.sh
@@ -86,6 +88,8 @@ jobs:
         run: rustup default stable
       - name: cargo update -Zminimal-versions
         run: cargo +nightly update -Zminimal-versions
+      - name: Install Valgrind
+        run: sudo apt update && sudo apt install valgrind
       - uses: cargo-bins/cargo-binstall@main
       - name: Install iai-callgrind-runner
         run: ./.github/scripts/install_iai_callgrind_runner.sh
