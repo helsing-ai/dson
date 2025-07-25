@@ -45,7 +45,7 @@ low-level library, and you will likely want to build a typed abstraction layer
 on top of it.
 
 **It does not include any networking protocols.** You are responsible for
-*implementing the transport layer to broadcast deltas to other replicas.
+implementing the transport layer to broadcast deltas to other replicas.
 
 ## Attribution
 
