@@ -120,7 +120,7 @@ where
     nkeys: usize,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "json")]
 impl<DS> fmt::Debug for Ops<DS>
 where
     DS: ArbitraryDelta,
