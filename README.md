@@ -13,6 +13,10 @@ The primary goal of this library is to enable robust, and efficient
 multi-writer collaboration in extremely constrained environments (high
 latency and low bandwidth; opportunistic networking).
 
+See also [Helsing's announcement blog post](blog).
+
+[blog]: https://blog.helsing.ai/dson-a-delta-state-crdt-for-resilient-peer-to-peer-communication-7823349a042c)
+
 ## Core Concepts
 
 DSON provides three fundamental, composable CRDTs:
