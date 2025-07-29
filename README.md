@@ -5,17 +5,16 @@
 
 This crate provides a Rust implementation of **DSON**, a space-efficient, delta-state Conflict-Free Replicated Datatype (CRDT) for JSON-like data structures. It is based on the research paper ["DSON: JSON CRDT Using Delta-Mutations For Document Stores"][dson-paper] and started as a port of the original author's [JavaScript implementation][js-impl].
 
-[dson-paper]: https://dl.acm.org/doi/10.14778/3510397.3510403
-[js-impl]: https://github.com/crdt-ibm-research/json-delta-crdt
-
-
 The primary goal of this library is to enable robust, and efficient
 multi-writer collaboration in extremely constrained environments (high
 latency and low bandwidth; opportunistic networking).
 
-See also [Helsing's announcement blog post](blog).
+See also [Helsing's announcement blog post][blog-post].
 
-[blog]: https://blog.helsing.ai/dson-a-delta-state-crdt-for-resilient-peer-to-peer-communication-7823349a042c)
+
+[dson-paper]: https://dl.acm.org/doi/10.14778/3510397.3510403
+[js-impl]: https://github.com/crdt-ibm-research/json-delta-crdt
+[blog-post]: https://blog.helsing.ai/dson-a-delta-state-crdt-for-resilient-peer-to-peer-communication-7823349a042c
 
 ## Core Concepts
 
