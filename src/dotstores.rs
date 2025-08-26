@@ -59,7 +59,7 @@ use std::{borrow::Borrow, collections::HashMap, fmt, hash::Hash, ops::Index};
 /// This is the fundamental building block of the DSON CRDT. It combines a `DotStore`, which holds
 /// the state of a specific data type, with a `CausalContext`, which tracks the set of observed
 /// events (dots) across replicas. This pairing allows for the implementation of delta-based
-// CRDTs, where changes can be calculated and transmitted as deltas rather than entire states.
+/// CRDTs, where changes can be calculated and transmitted as deltas rather than entire states.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(::serde::Deserialize, ::serde::Serialize))]
 pub struct CausalDotStore<DS> {
