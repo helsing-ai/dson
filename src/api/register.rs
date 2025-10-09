@@ -13,7 +13,7 @@ pub fn values(m: &MvReg) -> impl ExactSizeIterator<Item = &MvRegValue> {
 }
 
 /// Returns the value of this register assuming (and asserting) no conflicts on element values.
-pub fn value(m: &MvReg) -> Result<&MvRegValue, Box<SingleValueError>> {
+pub fn value(m: &MvReg) -> Result<&MvRegValue, Box<SingleValueError<MvRegValue>>> {
     m.value()
 }
 

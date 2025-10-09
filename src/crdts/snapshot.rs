@@ -21,10 +21,10 @@
 //!
 //! The snapshot types like [`OrMap`], [`OrArray`], and [`MvReg`] mirror the structure of the
 //! actual CRDTs but are read-only.
-use super::{ValueRef, mvreg::MvRegValue};
+use super::{Either, ValueRef, mvreg::MvRegValue};
 use crate::{DsonRandomState, ExtensionType, create_map, dotstores::DotFunValueIter};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     error, fmt,
     hash::Hash,
     ops::{Deref, Index},
@@ -37,6 +37,11 @@ pub trait ToValue {
 
     /// The conflict-less value type.
     type Value;
+
+    /// The (owned) leaf value type.
+    ///
+    /// This is the value type of the outmost nested CRDT, like a [`MvRegValue`].
+    type LeafValue;
 
     /// Returns the values of this type without collapsing conflicts.
     ///
@@ -55,7 +60,7 @@ pub trait ToValue {
     ///
     /// If a contained [`MvReg`](crate::MvReg) has conflicting values, this method returns an `Err`
     /// with [`SingleValueIssue::HasConflict`].
-    fn value(self) -> Result<Self::Value, Box<SingleValueError>>;
+    fn value(self) -> Result<Self::Value, Box<SingleValueError<Self::LeafValue>>>;
 }
 
 impl<'doc, C> ToValue for ValueRef<'doc, C>
@@ -65,6 +70,7 @@ where
 {
     type Values = AllValues<'doc, C::ValueRef<'doc>>;
     type Value = CollapsedValue<'doc, C::ValueRef<'doc>>;
+    type LeafValue = Either<MvRegValue, <C::ValueRef<'doc> as ToValue>::LeafValue>;
 
     fn values(self) -> Self::Values {
         match self {
@@ -75,12 +81,16 @@ where
         }
     }
 
-    fn value(self) -> Result<Self::Value, Box<SingleValueError>> {
+    fn value(self) -> Result<Self::Value, Box<SingleValueError<Self::LeafValue>>> {
         Ok(match self {
             ValueRef::Map(map) => CollapsedValue::Map(map.value()?),
             ValueRef::Array(arr) => CollapsedValue::Array(arr.value()?),
-            ValueRef::Register(reg) => CollapsedValue::Register(reg.value()?),
-            ValueRef::Custom(custom) => CollapsedValue::Custom(custom.value()?),
+            ValueRef::Register(reg) => {
+                CollapsedValue::Register(reg.value().map_err(|v| v.map_values(Either::Left))?)
+            }
+            ValueRef::Custom(custom) => {
+                CollapsedValue::Custom(custom.value().map_err(|v| v.map_values(Either::Right))?)
+            }
         })
     }
 }
@@ -175,15 +185,33 @@ where
 }
 
 /// An error that occurs when trying to collapse a CRDT with conflicting values.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SingleValueError {
-    /// The path to the value that has a conflict.
-    pub(crate) path: Vec<String>,
-    /// The issue that caused the error.
-    pub(crate) issue: SingleValueIssue,
+#[derive(Debug, Clone)]
+pub struct SingleValueError<T> {
+    pub path: Vec<String>,
+    pub issue: SingleValueIssue<T>,
 }
 
-impl fmt::Display for SingleValueError {
+impl<V: PartialEq + Ord> PartialEq for SingleValueError<V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.issue == other.issue
+    }
+}
+
+impl<T> SingleValueError<T> {
+    pub fn map_values<Other>(self, f: impl Fn(T) -> Other) -> Box<SingleValueError<Other>> {
+        let Self { path, issue } = self;
+        let issue = match issue {
+            SingleValueIssue::HasConflict(conflicts) => {
+                SingleValueIssue::HasConflict(conflicts.into_iter().map(f).collect())
+            }
+            SingleValueIssue::Cleared => SingleValueIssue::Cleared,
+        };
+
+        Box::new(SingleValueError { path, issue })
+    }
+}
+
+impl<T> fmt::Display for SingleValueError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "at <self>")?;
         // reverse since paths are appended as the error bubbles outwards
@@ -194,36 +222,48 @@ impl fmt::Display for SingleValueError {
     }
 }
 
-impl error::Error for SingleValueError {
+impl<V: fmt::Debug + 'static> error::Error for SingleValueError<V> {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         Some(&self.issue)
     }
 }
 
 /// An issue that can occur when trying to collapse a CRDT with conflicting values.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SingleValueIssue {
-    /// The value has a conflict, and the given map contains the conflicting values and their
-    /// counts.
-    HasConflict(BTreeMap<MvRegValue, usize>),
-    /// The value has been cleared, and has no value.
+#[derive(Debug, Clone)]
+pub enum SingleValueIssue<V> {
+    // NOTE: Contrary to `DotFun`, there are _NO_ ordering guarantees on the
+    // conflicted values
+    HasConflict(smallvec::SmallVec<[V; 2]>),
     Cleared,
 }
 
-impl fmt::Display for SingleValueIssue {
+impl<V: PartialEq + Ord> PartialEq for SingleValueIssue<V> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::HasConflict(l0), Self::HasConflict(r0)) => {
+                let mut l0 = l0.iter().collect::<Vec<_>>();
+                let mut r0 = r0.iter().collect::<Vec<_>>();
+                l0.sort_unstable();
+                r0.sort_unstable();
+                l0 == r0
+            }
+            (Self::Cleared, Self::Cleared) => true,
+            _ => false,
+        }
+    }
+}
+impl<V: Eq + Ord> Eq for SingleValueIssue<V> {}
+
+impl<T> fmt::Display for SingleValueIssue<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SingleValueIssue::HasConflict(set) => write!(
-                f,
-                "has {} possible values",
-                set.values().copied().sum::<usize>()
-            ),
+            SingleValueIssue::HasConflict(set) => write!(f, "has {} possible values", set.len()),
             SingleValueIssue::Cleared => write!(f, "has been cleared"),
         }
     }
 }
 
-impl error::Error for SingleValueIssue {}
+impl<T: fmt::Debug> error::Error for SingleValueIssue<T> {}
 
 // NOTE: This does not expose the HashMap so we can change its inner type later.
 /// A snapshot of an [`OrMap`](crate::OrMap) that can be used to inspect the current state of the

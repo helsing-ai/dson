@@ -5,7 +5,7 @@ use crate::{
     dotstores::{DotChange, DotStore, DryJoinOutput},
     sentinel::{Sentinel, ValueSentinel},
 };
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::cmp::Ordering;
 
 /// A **Multi-Value Register**, a CRDT for storing a single, atomic value.
 ///
@@ -388,6 +388,7 @@ impl Ord for MvRegValue {
 impl<'doc> ToValue for &'doc MvReg {
     type Values = snapshot::MvReg<'doc>;
     type Value = &'doc MvRegValue;
+    type LeafValue = MvRegValue;
 
     /// Returns the set of all possible values for this register in an arbitrary
     /// order.
@@ -405,7 +406,7 @@ impl<'doc> ToValue for &'doc MvReg {
     ///
     /// If there are multiple (ie, conflicting) values, [`SingleValueIssue::HasConflict`] is
     /// returned as `Err`.
-    fn value(self) -> Result<Self::Value, Box<SingleValueError>> {
+    fn value(self) -> Result<Self::Value, Box<SingleValueError<Self::LeafValue>>> {
         match self.0.len() {
             0 => Err(Box::new(SingleValueError {
                 path: Vec::new(),
@@ -421,10 +422,7 @@ impl<'doc> ToValue for &'doc MvReg {
                 ))
             }
             _ => {
-                let conflicts = self.0.values().cloned().fold(BTreeMap::new(), |mut m, v| {
-                    *m.entry(v).or_default() += 1;
-                    m
-                });
+                let conflicts = self.0.values().cloned().collect();
                 Err(Box::new(SingleValueError {
                     path: Vec::new(),
                     issue: SingleValueIssue::HasConflict(conflicts),
@@ -437,7 +435,7 @@ impl<'doc> ToValue for &'doc MvReg {
 impl MvReg {
     #[doc(hidden)]
     pub fn push(&mut self, dot: Dot, value: impl Into<MvRegValue>) {
-        self.0.push(dot, value.into());
+        self.0.set(dot, value.into());
     }
 
     /// Creates a CRDT that represents the overwrite of all past values of this
@@ -525,30 +523,24 @@ mod tests {
         let mut dedup_dots = std::collections::HashSet::new();
         let vs: Vec<_> = vs.into_iter().filter(|x| dedup_dots.insert(x.0)).collect();
         let mut cds = CausalDotStore::<MvReg>::default();
-        let mut possible_values = BTreeMap::<_, usize>::new();
+        let mut possible_values = Vec::<MvRegValue>::default();
         for (dot, v) in vs.clone() {
             cds.store.0.set(dot, v.clone());
-            *possible_values.entry(v).or_default() += 1;
+            possible_values.push(v);
         }
-        assert_eq!(
-            cds.store
-                .values()
-                .into_iter()
-                .fold(BTreeMap::new(), |mut m, v| {
-                    *m.entry(v.clone()).or_default() += 1;
-                    m
-                }),
-            possible_values,
-        );
-
-        let expected_value = if possible_values.len() == 1
-            && possible_values.values().copied().sum::<usize>() == 1
         {
-            Ok(possible_values.iter().next().unwrap().0)
+            let mut a = possible_values.clone();
+            let mut values_in_store = cds.store.values().into_iter().cloned().collect::<Vec<_>>();
+            a.sort_unstable();
+            values_in_store.sort_unstable();
+            assert_eq!(a, values_in_store);
+        }
+        let expected_value = if possible_values.len() == 1 {
+            Ok(possible_values.first().unwrap())
         } else if !possible_values.is_empty() {
             Err(Box::new(SingleValueError {
                 path: Vec::new(),
-                issue: SingleValueIssue::HasConflict(possible_values),
+                issue: SingleValueIssue::HasConflict(possible_values.into_iter().collect()),
             }))
         } else {
             Err(Box::new(SingleValueError {

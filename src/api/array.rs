@@ -4,7 +4,7 @@ use crate::{
     crdts::{
         TypeVariantValue, Value,
         orarray::{Position, Uid},
-        snapshot::{self, SingleValueError, ToValue},
+        snapshot::{self, ToValue},
     },
 };
 use std::{convert::Infallible, fmt};
@@ -44,9 +44,14 @@ where
 }
 
 /// Returns the values of this array assuming (and asserting) no conflicts on element values.
+// NOTE(ow): A type alias won't help much here :melt:.
+#[allow(clippy::type_complexity)]
 pub fn value<C>(
     m: &OrArray<C>,
-) -> Result<snapshot::OrArray<snapshot::CollapsedValue<'_, C::ValueRef<'_>>>, Box<SingleValueError>>
+) -> Result<
+    snapshot::OrArray<snapshot::CollapsedValue<'_, C::ValueRef<'_>>>,
+    Box<snapshot::SingleValueError<<&OrArray<C> as ToValue>::LeafValue>>,
+>
 where
     C: ExtensionType,
 {

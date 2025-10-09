@@ -1,6 +1,6 @@
 // (c) Copyright 2025 Helsing GmbH. All rights reserved.
 use super::{
-    NoExtensionTypes, TypeVariantValue, Value, ValueRef,
+    Either, NoExtensionTypes, TypeVariantValue, Value, ValueRef,
     mvreg::MvRegValue,
     snapshot::{self, AllValues, CollapsedValue, SingleValueError, SingleValueIssue, ToValue},
 };
@@ -637,6 +637,7 @@ where
 {
     type Values = snapshot::OrArray<AllValues<'doc, C::ValueRef<'doc>>>;
     type Value = snapshot::OrArray<CollapsedValue<'doc, C::ValueRef<'doc>>>;
+    type LeafValue = Either<MvRegValue, <C::ValueRef<'doc> as ToValue>::LeafValue>;
 
     fn values(self) -> Self::Values {
         let result = self.with_list(|v, _, _| match v.coerce_to_value_ref() {
@@ -652,11 +653,13 @@ where
         snapshot::OrArray { list }
     }
 
-    fn value(self) -> Result<Self::Value, Box<SingleValueError>> {
+    fn value(self) -> Result<Self::Value, Box<SingleValueError<Self::LeafValue>>> {
         let result = self.with_list(|v, uid, p| match v.coerce_to_value_ref() {
             ValueRef::Map(m) => Ok(Some(CollapsedValue::Map(m.value()?))),
             ValueRef::Array(a) => Ok(Some(CollapsedValue::Array(a.value()?))),
-            ValueRef::Custom(c) => Ok(Some(CollapsedValue::Custom(c.value()?))),
+            ValueRef::Custom(c) => Ok(Some(CollapsedValue::Custom(
+                c.value().map_err(|v| v.map_values(Either::Right))?,
+            ))),
             ValueRef::Register(r) => match r.value() {
                 Ok(v) => Ok(Some(CollapsedValue::Register(v))),
 
@@ -670,7 +673,7 @@ where
                 Err(mut e) => {
                     // make errors more helpful by including the path to the MvReg with conflicts
                     e.path.push(format!("[{uid:?}@{}]", p.0));
-                    Err(e)
+                    Err(e.map_values(Either::Left))
                 }
             },
         });
