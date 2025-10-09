@@ -272,7 +272,8 @@ pub use causal_context::{
 };
 mod dotstores;
 pub use dotstores::{
-    CausalDotStore, DotChange, DotFun, DotFunMap, DotMap, DotStore, DotStoreJoin, DryJoinOutput,
+    CausalDotStore, DotChange, DotFun, DotFunMap, DotFunValueIter, DotMap, DotStore, DotStoreJoin,
+    DryJoinOutput,
 };
 pub mod crdts;
 pub use crdts::{mvreg::MvReg, orarray::OrArray, ormap::OrMap};

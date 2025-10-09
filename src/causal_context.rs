@@ -699,7 +699,7 @@ impl CausalContext {
     /// Records a new observed [`Dot`] in the causal context.
     ///
     /// Will not compact automatically.
-    pub(crate) fn insert_dot(&mut self, dot: Dot) {
+    pub fn insert_dot(&mut self, dot: Dot) {
         self.dots
             .entry(dot.actor())
             .or_insert_with(IntervalSet::new)

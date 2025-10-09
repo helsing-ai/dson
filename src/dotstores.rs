@@ -680,11 +680,6 @@ where
 }
 
 impl<V> DotFun<V> {
-    #[doc(hidden)]
-    pub fn push(&mut self, dot: Dot, v: V) {
-        self.state.push((dot, v));
-    }
-
     /// Constructs a [`DotFun`] with the given initial capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {

@@ -3,7 +3,7 @@ use crate::{
     CausalContext, CausalDotStore, ExtensionType, Identifier, MvReg, OrArray, OrMap,
     crdts::{
         TypeVariantValue, Value,
-        snapshot::{self, SingleValueError, ToValue},
+        snapshot::{self, ToValue},
     },
 };
 use std::{borrow::Borrow, fmt, hash::Hash};
@@ -20,11 +20,13 @@ where
 }
 
 /// Returns the values of this map assuming (and asserting) no conflicts on element values.
+// NOTE(ow): A type alias won't help much here :melt:.
+#[allow(clippy::type_complexity)]
 pub fn value<K, C>(
     m: &OrMap<K, C>,
 ) -> Result<
     snapshot::OrMap<'_, K, snapshot::CollapsedValue<'_, C::ValueRef<'_>>>,
-    Box<SingleValueError>,
+    Box<snapshot::SingleValueError<<&OrMap<K, C> as ToValue>::LeafValue>>,
 >
 where
     K: Hash + Eq + fmt::Debug + fmt::Display + Clone,

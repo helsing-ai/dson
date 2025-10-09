@@ -1,6 +1,6 @@
 // (c) Copyright 2025 Helsing GmbH. All rights reserved.
 use super::{
-    NoExtensionTypes, TypeVariantValue, Value, ValueRef,
+    Either, NoExtensionTypes, TypeVariantValue, Value, ValueRef,
     mvreg::MvRegValue,
     orarray::Uid,
     snapshot::{self, AllValues, CollapsedValue, SingleValueError, SingleValueIssue, ToValue},
@@ -171,6 +171,7 @@ where
 {
     type Values = snapshot::OrMap<'doc, K, AllValues<'doc, C::ValueRef<'doc>>>;
     type Value = snapshot::OrMap<'doc, K, CollapsedValue<'doc, C::ValueRef<'doc>>>;
+    type LeafValue = Either<MvRegValue, <C::ValueRef<'doc> as ToValue>::LeafValue>;
 
     fn values(self) -> Self::Values {
         let mut ret_map = snapshot::OrMap::default();
@@ -186,7 +187,7 @@ where
         ret_map
     }
 
-    fn value(self) -> Result<Self::Value, Box<SingleValueError>> {
+    fn value(self) -> Result<Self::Value, Box<SingleValueError<Self::LeafValue>>> {
         let mut ret_map = snapshot::OrMap::default();
         for (key, inner_map) in self.0.iter() {
             let v = match inner_map.coerce_to_value_ref() {
@@ -206,11 +207,15 @@ where
                         Err(mut e) => {
                             // make errors more helpful by including the path to the MvReg with conflicts
                             e.path.push(key.to_string());
-                            Err(e)
+                            Err(e.map_values(Either::Left))
                         }
                     }
                 }
-                ValueRef::Custom(c) => c.value().map(CollapsedValue::Custom).map(Some),
+                ValueRef::Custom(c) => c
+                    .value()
+                    .map(CollapsedValue::Custom)
+                    .map(Some)
+                    .map_err(|v| v.map_values(Either::Right)),
             }?;
 
             if let Some(v) = v {
@@ -358,17 +363,62 @@ where
         apply_to_map,
         "an [`OrMap`]",
         map,
-        [array, reg],
+        [array, reg, custom],
         OrMap<String, C>
     );
     apply_to_X!(
         apply_to_array,
         "an [`OrArray`]",
         array,
-        [map, reg],
+        [map, reg, custom],
         OrArray<C>
     );
-    apply_to_X!(apply_to_register, "an [`MvReg`]", reg, [map, array], MvReg);
+    apply_to_X!(
+        apply_to_register,
+        "an [`MvReg`]",
+        reg,
+        [map, array, custom],
+        MvReg
+    );
+
+    /// Updates the value at key `k` to be a custom type using `o`.
+    ///
+    /// This is mostly a convenience wrapper around [`OrMap::apply`].
+    /// See that method for more details.
+    // NOTE(ow): Can't use the `apply_to_X` macro above, as `O` goes from
+    // `C` to `C::Value`.
+    pub fn apply_to_custom<'data, O>(
+        &'data self,
+        o: O,
+        k: K,
+        cc: &'_ CausalContext,
+        id: Identifier,
+    ) -> CausalDotStore<Self>
+    where
+        O: for<'cc, 'v> FnOnce(&'v C, &'cc CausalContext, Identifier) -> CausalDotStore<C::Value>,
+    {
+        let CausalDotStore {
+            store: ret_map,
+            context: mut ret_cc,
+        } = self.apply(
+            move |m, cc, id| {
+                let y = o(&m.custom, cc, id);
+                y.map_store(Value::Custom)
+            },
+            k.clone(),
+            cc,
+            id,
+        );
+        if let Some(inner) = self.0.get(&k) {
+            inner.map.add_dots_to(&mut ret_cc);
+            inner.array.add_dots_to(&mut ret_cc);
+            inner.reg.add_dots_to(&mut ret_cc);
+        }
+        CausalDotStore {
+            store: ret_map,
+            context: ret_cc,
+        }
+    }
 
     /// Creates a CRDT that represents `O` applied to the [`Value`] of the element with key `key`,
     /// if any, and written back to that same key in the map.
