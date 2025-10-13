@@ -280,6 +280,7 @@ pub use crdts::{mvreg::MvReg, orarray::OrArray, ormap::OrMap};
 pub mod api;
 #[cfg(feature = "chrono")]
 pub mod datetime_literal;
+pub mod either;
 #[cfg(feature = "json")]
 mod json;
 /// Macros usable for tests and initialization

@@ -36,6 +36,7 @@ use self::{mvreg::MvRegValue, orarray::Uid, snapshot::ToValue};
 use crate::{
     CausalContext, DotStoreJoin, ExtensionType, MvReg, OrArray, OrMap,
     dotstores::{DotChange, DotStore, DryJoinOutput},
+    either::Either,
     sentinel::{KeySentinel, Sentinel, TypeSentinel, ValueSentinel, Visit},
 };
 use std::{fmt, hash::Hash};
@@ -110,34 +111,6 @@ pub struct NoExtensionTypes;
 #[cfg_attr(feature = "serde", derive(::serde::Deserialize, ::serde::Serialize))]
 // TODO: potentially replace with ! when https://github.com/rust-lang/rust/issues/35121 lands.
 pub enum NoExtensionTypesType {}
-
-/// The enum Either with variants Left and Right is a general purpose sum type
-/// with two cases.
-#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
-pub enum Either<A, B> {
-    Left(A),
-    Right(B),
-}
-
-impl<A, B> Either<Either<A, B>, B> {
-    /// Converts from `Either<Either<A, B, B>>` to `Either<A, B>`.
-    pub fn flatten(self) -> Either<A, B> {
-        match self {
-            Either::Left(nested) => nested,
-            Either::Right(b) => Either::Right(b),
-        }
-    }
-}
-
-impl<A, B> Either<A, Either<A, B>> {
-    /// Converts from `Either<A, Either<A, B>>` to `Either<A, B>`.
-    pub fn flatten(self) -> Either<A, B> {
-        match self {
-            Either::Left(a) => Either::Left(a),
-            Either::Right(nested) => nested,
-        }
-    }
-}
 
 #[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(::serde::Deserialize, ::serde::Serialize))]
@@ -495,13 +468,16 @@ where
 }
 
 impl<C> TypeVariantValue<C> {
+    /// Coerces the potentially type-conflicted value in `self` into a single-typed
+    /// [`ValueRef`].
+    ///
+    /// NOTE: as written in the trait's [`ExtensionType::coerce_to_value_ref`]
+    /// documentation, this is a lossy operation: if the underlying value is
+    /// type conflicted, an arbitrary but deterministic variant is chosen
     pub fn coerce_to_value_ref(&self) -> ValueRef<'_, C>
     where
         C: ExtensionType,
     {
-        // NOTE(ow): as written in the trait's documentation, this is a lossy
-        // operation: if the underlying value is type conflicted, an arbitrary
-        // but deterministic variant is chosen
         if !self.custom.is_bottom() {
             ValueRef::Custom(self.custom.coerce_to_value_ref())
         } else if !self.map.is_bottom() {

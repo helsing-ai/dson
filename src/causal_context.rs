@@ -698,6 +698,10 @@ impl CausalContext {
 
     /// Records a new observed [`Dot`] in the causal context.
     ///
+    ///This is a "dangerous" method, since it can break some internal
+    ///assumptions about dots being contiguous and the causal context being
+    ///compacted.
+    ///
     /// Will not compact automatically.
     pub fn insert_dot(&mut self, dot: Dot) {
         self.dots

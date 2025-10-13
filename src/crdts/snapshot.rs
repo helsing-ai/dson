@@ -187,10 +187,15 @@ where
 /// An error that occurs when trying to collapse a CRDT with conflicting values.
 #[derive(Debug, Clone)]
 pub struct SingleValueError<T> {
+    /// The path to the value that has an issue.
     pub path: Vec<String>,
+    /// The issue that occurred.
     pub issue: SingleValueIssue<T>,
 }
 
+// We can't derive `PartialEq` because `SingleValueIssue` implements it manually
+// to provide order-insensitive equality for conflicts. For that we need the
+// additional `Ord` bound.
 impl<V: PartialEq + Ord> PartialEq for SingleValueError<V> {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.issue == other.issue
@@ -198,6 +203,7 @@ impl<V: PartialEq + Ord> PartialEq for SingleValueError<V> {
 }
 
 impl<T> SingleValueError<T> {
+    /// Maps the values within the error to a different type.
     pub fn map_values<Other>(self, f: impl Fn(T) -> Other) -> Box<SingleValueError<Other>> {
         let Self { path, issue } = self;
         let issue = match issue {

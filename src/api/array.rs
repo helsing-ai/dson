@@ -44,7 +44,7 @@ where
 }
 
 /// Returns the values of this array assuming (and asserting) no conflicts on element values.
-// NOTE(ow): A type alias won't help much here :melt:.
+// NOTE: A type alias won't help much here :melt:.
 #[allow(clippy::type_complexity)]
 pub fn value<C>(
     m: &OrArray<C>,
