@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0]
 
 ### Added
-- Add support for custom leaf values
+- Add support for custom leaf values.
 
 ## [0.1.1]
 

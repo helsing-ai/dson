@@ -1144,7 +1144,6 @@ Cargo.lock
 .terraform
 ## Visual Studio Code
 .vscode
-!Cargo.lock
 # GENERATED-CONTENT-END
 
 /target
