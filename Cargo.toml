@@ -40,7 +40,7 @@ ulid = { version = "1.2.0", optional = true }
 
 [dev-dependencies]
 bimap = "0.6.3"
-iai-callgrind = "0.14.0"
+iai-callgrind = "0.16.1"
 insta = "1.43.1"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
