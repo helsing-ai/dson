@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // After this, both replicas are in sync.
     replica_b_state.join_or_replace_with(delta_a1.store, &delta_a1.context);
     assert_eq!(replica_a_state, replica_b_state);
-    println!("   Initial state synced: {:?}", replica_a_state);
+    println!("   Initial state synced: {replica_a_state:?}");
 
     // CONCURRENT EDITS
     println!("\n3. Replicas A and B make concurrent edits without syncing.");
@@ -182,7 +182,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("\n5. Verifying the converged state.");
     assert_eq!(replica_a_state, replica_b_state);
     println!("   Replicas have converged to the same state.");
-    println!("   Final state: {:?}", replica_a_state);
+    println!("   Final state: {replica_a_state:?}");
 
     // Now, let's inspect the converged data structure to see how conflicts were handled.
     let user_profile = replica_a_state
@@ -210,10 +210,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     assert!(name_values.contains(&MvRegValue::String("Alice B.".to_string())));
     assert!(name_values.contains(&MvRegValue::String("Alice C.".to_string())));
-    println!(
-        "   SUCCESS: Name field correctly shows conflicting values: {:?}",
-        name_values
-    );
+    println!("   SUCCESS: Name field correctly shows conflicting values: {name_values:?}");
 
     // --- Verify Tags Array ---
     // The 'tags' array should contain both "rust" and "crdt", as they were added concurrently.
@@ -241,10 +238,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     assert_eq!(tag_values.len(), 2, "Tags array should have two elements");
     assert!(tag_values.contains(&"rust".to_string()));
     assert!(tag_values.contains(&"crdt".to_string()));
-    println!(
-        "   SUCCESS: Tags array correctly contains: {:?}",
-        tag_values
-    );
+    println!("   SUCCESS: Tags array correctly contains: {tag_values:?}");
 
     // --- Verify Settings Map ---
     // The 'settings' map was only modified by Replica B, so it should exist with the 'dark_mode' key.
@@ -261,10 +255,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect("should be no conflict in dark_mode setting");
 
     assert_eq!(*dark_mode, MvRegValue::Bool(true));
-    println!(
-        "   SUCCESS: Settings map correctly contains: dark_mode -> {:?}",
-        dark_mode
-    );
+    println!("   SUCCESS: Settings map correctly contains: dark_mode -> {dark_mode:?}");
 
     Ok(())
 }

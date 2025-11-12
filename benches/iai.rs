@@ -93,6 +93,25 @@ fn setup_map(n: usize) -> (Identifier, CausalDotStore<OrMap<String, NoExtensionT
     (omni_id, omni)
 }
 
+fn setup_direct_crdt_map(
+    n: usize,
+) -> (Identifier, CausalDotStore<OrMap<String, NoExtensionTypes>>) {
+    dson::enable_determinism();
+
+    let omni_id = Identifier::new(1, 0);
+    let mut omni = CausalDotStore::<OrMap<String, NoExtensionTypes>>::default();
+    for i in 0..n {
+        let delta = omni.store.apply_to_register(
+            |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+            i.to_string(),
+            &omni.context,
+            omni_id,
+        );
+        omni.consume(delta, &mut DummySentinel).unwrap();
+    }
+    (omni_id, omni)
+}
+
 #[library_benchmark]
 #[bench::medium(setup_map(255))]
 fn map_insert((id, omni): (Identifier, CausalDotStore<OrMap<String, NoExtensionTypes>>)) {
@@ -120,6 +139,46 @@ fn map_update((id, omni): (Identifier, CausalDotStore<OrMap<String, NoExtensionT
         |old, cc, id| old.write(MvRegValue::Bool(true), cc, id),
         "128".into(),
     )(&omni.store, &omni.context, id);
+    black_box(update);
+}
+
+#[library_benchmark]
+#[bench::medium(setup_direct_crdt_map(255))]
+fn direct_crdt_map_insert(
+    (id, omni): (Identifier, CausalDotStore<OrMap<String, NoExtensionTypes>>),
+) {
+    let omni = black_box(omni);
+    let insert = omni.store.apply_to_register(
+        |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+        "duck".to_string(),
+        &omni.context,
+        id,
+    );
+    black_box(insert);
+}
+
+#[library_benchmark]
+#[bench::medium(setup_direct_crdt_map(255))]
+fn direct_crdt_map_remove(
+    (id, omni): (Identifier, CausalDotStore<OrMap<String, NoExtensionTypes>>),
+) {
+    let omni = black_box(omni);
+    let remove = omni.store.remove(&"128".to_string(), &omni.context, id);
+    black_box(remove);
+}
+
+#[library_benchmark]
+#[bench::medium(setup_direct_crdt_map(255))]
+fn direct_crdt_map_update(
+    (id, omni): (Identifier, CausalDotStore<OrMap<String, NoExtensionTypes>>),
+) {
+    let omni = black_box(omni);
+    let update = omni.store.apply_to_register(
+        |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+        "128".to_string(),
+        &omni.context,
+        id,
+    );
     black_box(update);
 }
 
@@ -196,6 +255,10 @@ library_benchmark_group!(
     benchmarks = map_insert, map_remove, map_update
 );
 library_benchmark_group!(
+    name = direct_crdt_maps;
+    benchmarks = direct_crdt_map_insert, direct_crdt_map_remove, direct_crdt_map_update
+);
+library_benchmark_group!(
     name = registers;
     benchmarks = register_write, register_clear
 );
@@ -208,6 +271,7 @@ library_benchmark_group!(
 main!(
     library_benchmark_groups = arrays,
     maps,
+    direct_crdt_maps,
     registers,
     causal_contexts
 );

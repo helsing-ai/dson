@@ -120,16 +120,12 @@
 //!
 //! ## Getting Started: A Simple Conflict
 //!
-//! This section models a simple scenario where two users, Alice and Bob, concurrently
-//! edit the same piece of data, leading to a conflict that DSON resolves gracefully.
-//!
-//! This example uses a top-level [`OrMap`] keyed by a string, holding a [`MvReg`] (Multi-Value Register)
-//! for a string value. While `OrMap` is generic over its key, it's typically a `String` to
-//! model JSON-like objects.
+//! This example demonstrates how two users (Alice and Bob) concurrently edit the same
+//! data, creating a conflict that DSON resolves gracefully using the transaction API.
 //!
 //! ```rust
 //! use dson::{
-//!     crdts::{mvreg::MvRegValue, snapshot::ToValue, NoExtensionTypes},
+//!     crdts::{mvreg::MvRegValue, snapshot::ToValue},
 //!     CausalDotStore, Identifier, OrMap,
 //! };
 //!
@@ -142,59 +138,64 @@
 //! let mut bob_store = CausalDotStore::<OrMap<String>>::default();
 //!
 //! // 2. INITIAL STATE
-//! // Alice creates an initial value. The key "123" holds a register.
-//! let key = "123".to_string();
-//! let delta_from_alice = dson::api::map::apply_to_register::<_, NoExtensionTypes, _>(
-//!     |reg, ctx, id| reg.write("initial value".to_string().into(), ctx, id),
-//!     key.clone(),
-//! )(&alice_store.store, &alice_store.context, alice_id);
-//!
-//! // Alice applies the change to her own store.
-//! alice_store.join_or_replace_with(delta_from_alice.store.clone(), &delta_from_alice.context);
+//! // Alice creates an initial value using the transaction API.
+//! let key = "document".to_string();
+//! let delta_from_alice = {
+//!     let mut tx = alice_store.transact(alice_id);
+//!     tx.write_register(&key, MvRegValue::String("initial value".to_string()));
+//!     tx.commit()
+//! };
 //!
 //! // 3. SYNC
 //! // Bob receives Alice's initial change.
-//! bob_store.join_or_replace_with(delta_from_alice.store, &delta_from_alice.context);
+//! bob_store.join_or_replace_with(delta_from_alice.0.store, &delta_from_alice.0.context);
 //! assert_eq!(alice_store, bob_store);
 //!
 //! // 4. CONCURRENT EDITS
-//! // Now, Alice and Bob make changes without syncing.
+//! // Now Alice and Bob make changes without syncing.
 //!
 //! // Alice updates the value to "from Alice".
-//! let delta_alice_edit = dson::api::map::apply_to_register::<_, NoExtensionTypes, _>(
-//!     |reg, ctx, id| reg.write("from Alice".to_string().into(), ctx, id),
-//!     key.clone(),
-//! )(&alice_store.store, &alice_store.context, alice_id);
-//! alice_store.join_or_replace_with(delta_alice_edit.store.clone(), &delta_alice_edit.context);
+//! let delta_alice_edit = {
+//!     let mut tx = alice_store.transact(alice_id);
+//!     tx.write_register(&key, MvRegValue::String("from Alice".to_string()));
+//!     tx.commit()
+//! };
 //!
 //! // Concurrently, Bob updates the value to "from Bob".
-//! let delta_bob_edit = dson::api::map::apply_to_register::<_, NoExtensionTypes, _>(
-//!     |reg, ctx, id| reg.write("from Bob".to_string().into(), ctx, id),
-//!     key.clone(),
-//! )(&bob_store.store, &bob_store.context, bob_id);
-//! bob_store.join_or_replace_with(delta_bob_edit.store.clone(), &delta_bob_edit.context);
+//! let delta_bob_edit = {
+//!     let mut tx = bob_store.transact(bob_id);
+//!     tx.write_register(&key, MvRegValue::String("from Bob".to_string()));
+//!     tx.commit()
+//! };
 //!
 //! // 5. MERGE
-//! // The replicas now exchange their changes.
-//!
-//! // Alice merges Bob's edit.
-//! alice_store.join_or_replace_with(delta_bob_edit.store, &delta_bob_edit.context);
-//!
-//! // Bob merges Alice's edit.
-//! bob_store.join_or_replace_with(delta_alice_edit.store, &delta_alice_edit.context);
+//! // The replicas exchange their changes.
+//! alice_store.join_or_replace_with(delta_bob_edit.0.store, &delta_bob_edit.0.context);
+//! bob_store.join_or_replace_with(delta_alice_edit.0.store, &delta_alice_edit.0.context);
 //!
 //! // After merging, both stores are identical.
 //! assert_eq!(alice_store, bob_store);
 //!
 //! // 6. VERIFY CONFLICT
-//! // The concurrent writes are preserved as a conflict in the MvReg.
-//! let register_value = alice_store.store.get(&key).unwrap();
-//! let values: Vec<_> = register_value.reg.values().into_iter().collect();
+//! // The concurrent writes are preserved as a conflict in the register.
+//! // The transaction API exposes this through the CrdtValue enum.
+//! use dson::transaction::CrdtValue;
 //!
-//! assert_eq!(values.len(), 2);
-//! assert!(values.contains(&&MvRegValue::String("from Alice".to_string())));
-//! assert!(values.contains(&&MvRegValue::String("from Bob".to_string())));
+//! let tx = alice_store.transact(alice_id);
+//! match tx.get(&key) {
+//!     Some(CrdtValue::Register(reg)) => {
+//!         // Read all concurrent values
+//!         let values: Vec<_> = reg.values().into_iter().collect();
+//!         assert_eq!(values.len(), 2);
+//!         assert!(values.contains(&&MvRegValue::String("from Alice".to_string())));
+//!         assert!(values.contains(&&MvRegValue::String("from Bob".to_string())));
+//!     }
+//!     _ => panic!("Expected register with conflict"),
+//! }
 //! ```
+//!
+//! For more examples of the transaction API, including nested structures and performance
+//! considerations, see the [`transaction`] module documentation.
 //!
 //! ## Advanced Topics
 //!
@@ -278,6 +279,11 @@ pub use dotstores::{
 pub mod crdts;
 pub use crdts::{mvreg::MvReg, orarray::OrArray, ormap::OrMap};
 pub mod api;
+/// Transaction-based API for ergonomic CRDT mutations.
+///
+/// See [`transaction`] module documentation for details and examples.
+pub mod transaction;
+pub use transaction::Delta;
 #[cfg(feature = "chrono")]
 pub mod datetime_literal;
 pub mod either;

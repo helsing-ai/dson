@@ -305,6 +305,12 @@ macro_rules! apply_to_X {
         ///
         /// This is mostly a convenience wrapper around [`OrMap::apply`].
         /// See that method for more details.
+        ///
+        /// # Multiple Operations
+        ///
+        /// Multiple operations within the closure `o` require manual context management.
+        /// Each operation needs a context containing dots from previous operations.
+        /// Call this method multiple times to avoid manual context handling.
         pub fn $name<'data, O>(&'data self, o: O, k: K, cc: &'_ CausalContext, id: Identifier) -> CausalDotStore<Self>
         where
             O: for<'cc, 'v> FnOnce(
@@ -385,6 +391,12 @@ where
     ///
     /// This is mostly a convenience wrapper around [`OrMap::apply`].
     /// See that method for more details.
+    ///
+    /// # Multiple Operations
+    ///
+    /// Multiple operations within the closure `o` require manual context management.
+    /// Each operation needs a context containing dots from previous operations.
+    /// Call this method multiple times to avoid manual context handling.
     // NOTE(ow): Can't use the `apply_to_X` macro above, as `O` goes from
     // `C` to `C::Value`.
     pub fn apply_to_custom<'data, O>(
@@ -425,6 +437,12 @@ where
     ///
     /// `O` will be passed `None` if there is currently no value with key `key`, such as when apply
     /// is used on an empty map or on an [`OrMap`] CRDT that doesn't _change_ the value at `key`.
+    ///
+    /// # Multiple Operations
+    ///
+    /// Multiple operations within the closure require manual context management. Each operation
+    /// needs a context containing dots from previous operations. Call `apply` multiple times or
+    /// use the transaction API to avoid manual context handling.
     pub fn apply<'data, O>(
         &'data self,
         o: O,

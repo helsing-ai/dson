@@ -93,6 +93,34 @@ correct Rust toolchain and other helpful dependencies.
 In general, `dson` has very little dependencies, so you should expect to run `cargo build`/`cargo test`
 just fine.
 
+### Benchmarks
+
+Two benchmark harnesses are available:
+
+**Tango** - Paired-testing benchmarks for detecting performance regressions:
+
+```sh
+# Establish baseline
+cargo bench --bench tango
+
+# After making changes, compare against baseline
+cargo bench --bench tango -- compare
+
+# Filter specific benchmarks
+cargo bench --bench tango -- compare -f "transaction::map::*"
+
+# Quick absolute timings (non-comparative mode)
+cargo bench --bench tango -- solo -f "transaction::map::*" -s 100
+```
+
+**IAI-Callgrind** - Instruction-level profiling using Valgrind (Linux only):
+
+```sh
+# Run IAI benchmarks (requires Linux and Valgrind)
+cargo bench --bench iai
+cargo bench --bench nested_transactions
+```
+
 ## Documentation
 
 For a complete guide, including detailed explanations of the core concepts,

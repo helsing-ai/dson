@@ -114,6 +114,55 @@ fn map_benchmarks() -> impl IntoBenchmarks {
     ]
 }
 
+fn direct_crdt_map_benchmarks() -> impl IntoBenchmarks {
+    dson::enable_determinism();
+
+    let omni_id = Identifier::new(1, 0);
+    let mut omni = CausalDotStore::<OrMap<String, NoExtensionTypes>>::default();
+    for i in 0..255 {
+        let delta = omni.store.apply_to_register(
+            |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+            i.to_string(),
+            &omni.context,
+            omni_id,
+        );
+        omni.consume(delta, &mut DummySentinel).unwrap();
+    }
+
+    let omni: &'static _ = Box::leak(Box::new(omni));
+    [
+        benchmark_fn("direct-crdt::map::insert", move |b| {
+            b.iter(move || {
+                let omni = black_box(&*omni);
+                omni.store.apply_to_register(
+                    |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+                    "duck".to_string(),
+                    &omni.context,
+                    omni_id,
+                )
+            })
+        }),
+        benchmark_fn("direct-crdt::map::remove", move |b| {
+            b.iter(move || {
+                let omni = black_box(&*omni);
+                omni.store
+                    .remove(&"128".to_string(), &omni.context, omni_id)
+            })
+        }),
+        benchmark_fn("direct-crdt::map::update", move |b| {
+            b.iter(move || {
+                let omni = black_box(&*omni);
+                omni.store.apply_to_register(
+                    |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+                    "128".to_string(),
+                    &omni.context,
+                    omni_id,
+                )
+            })
+        }),
+    ]
+}
+
 fn register_benchmarks() -> impl IntoBenchmarks {
     dson::enable_determinism();
 
@@ -134,6 +183,56 @@ fn register_benchmarks() -> impl IntoBenchmarks {
             b.iter(move || {
                 let omni = black_box(&*omni);
                 api::register::clear()(&omni.store, &omni.context, omni_id)
+            })
+        }),
+    ]
+}
+
+fn transaction_map_benchmarks() -> impl IntoBenchmarks {
+    dson::enable_determinism();
+    let omni_id = Identifier::new(1, 0);
+
+    // Setup for single-op benchmarks (no pre-population, isolate transaction overhead)
+    [
+        benchmark_fn("transaction::map::insert-empty", move |b| {
+            b.iter(move || {
+                let mut omni = CausalDotStore::<OrMap<String, NoExtensionTypes>>::default();
+                let mut tx = black_box(&mut omni).transact(omni_id);
+                tx.write_register("duck".to_string(), MvRegValue::Bool(true));
+                black_box(tx.commit())
+            })
+        }),
+        benchmark_fn("transaction::map::insert-with-setup", move |b| {
+            b.iter(move || {
+                let mut omni = CausalDotStore::<OrMap<String, NoExtensionTypes>>::default();
+                for i in 0..255 {
+                    let delta = omni.store.apply_to_register(
+                        |reg, ctx, id| reg.write(MvRegValue::Bool(true), ctx, id),
+                        i.to_string(),
+                        &omni.context,
+                        omni_id,
+                    );
+                    omni.consume(delta, &mut DummySentinel).unwrap();
+                }
+                let mut tx = black_box(&mut omni).transact(omni_id);
+                tx.write_register("duck".to_string(), MvRegValue::Bool(true));
+                black_box(tx.commit())
+            })
+        }),
+        benchmark_fn("transaction::map::remove-empty", move |b| {
+            b.iter(move || {
+                let mut omni = CausalDotStore::<OrMap<String, NoExtensionTypes>>::default();
+                let mut tx = black_box(&mut omni).transact(omni_id);
+                tx.remove("128".to_string());
+                black_box(tx.commit())
+            })
+        }),
+        benchmark_fn("transaction::map::update-empty", move |b| {
+            b.iter(move || {
+                let mut omni = CausalDotStore::<OrMap<String, NoExtensionTypes>>::default();
+                let mut tx = black_box(&mut omni).transact(omni_id);
+                tx.write_register("128".to_string(), MvRegValue::Bool(true));
+                black_box(tx.commit())
             })
         }),
     ]
@@ -200,6 +299,8 @@ fn cc_benchmarks() -> impl IntoBenchmarks {
 tango_benchmarks!(
     array_benchmarks(),
     map_benchmarks(),
+    direct_crdt_map_benchmarks(),
+    transaction_map_benchmarks(),
     register_benchmarks(),
     cc_benchmarks()
 );
