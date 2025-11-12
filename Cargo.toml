@@ -59,3 +59,7 @@ name = "tango"
 [[bench]]
 harness = false
 name = "iai"
+
+[[bench]]
+harness = false
+name = "nested_transactions"

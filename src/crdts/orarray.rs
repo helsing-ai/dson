@@ -1108,6 +1108,104 @@ where
             context: ret_cc,
         }
     }
+
+    /// Insert a register containing `value` at index `idx`.
+    ///
+    /// If `idx` is greater than the array length, the value is appended to the end.
+    ///
+    /// For inserting maps or arrays, use `insert_idx_with`.
+    pub fn insert_idx_register(
+        &self,
+        idx: usize,
+        value: impl Into<MvRegValue>,
+        cc: &CausalContext,
+        id: Identifier,
+    ) -> CausalDotStore<Self> {
+        let uid = cc.next_dot_for(id).into();
+        let clamped_idx = idx.min(self.len());
+        let pos = create_position_for_index(self, clamped_idx);
+        let value = value.into();
+
+        self.insert_register(
+            uid,
+            |cc, id| MvReg::default().write(value, cc, id),
+            pos,
+            cc,
+            id,
+        )
+    }
+
+    /// Insert a value at index `idx` using a closure for complex cases.
+    ///
+    /// If `idx` is greater than the array length, the value is appended to the end.
+    ///
+    /// For simple register values, use `insert_idx_register`.
+    pub fn insert_idx_with<O>(
+        &self,
+        idx: usize,
+        value_closure: O,
+        cc: &CausalContext,
+        id: Identifier,
+    ) -> CausalDotStore<Self>
+    where
+        O: for<'cc> FnOnce(&'cc CausalContext, Identifier) -> CausalDotStore<Value<C>>,
+    {
+        let uid = cc.next_dot_for(id).into();
+        let clamped_idx = idx.min(self.len());
+        let pos = create_position_for_index(self, clamped_idx);
+
+        self.insert(uid, value_closure, pos, cc, id)
+    }
+
+    /// Remove element at index `idx`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `idx >= len()`.
+    pub fn remove(&self, idx: usize, cc: &CausalContext, id: Identifier) -> CausalDotStore<Self> {
+        let uid = uid_from_index(self, idx);
+        self.delete(uid, cc, id)
+    }
+}
+
+fn ids<C>(m: &OrArray<C>) -> Vec<((), Uid, Position)> {
+    use std::convert::Infallible;
+    m.with_list(|_, _, _| Ok::<_, Infallible>(Some(())))
+        .unwrap()
+}
+
+fn create_position_for_index<C>(m: &OrArray<C>, idx: usize) -> Position {
+    if idx == 0 {
+        let min_p = m.iter_as_is().map(|(_, _, p)| p).min();
+        return Position::between(None, min_p);
+    }
+    if idx == m.len() {
+        let max_p = m.iter_as_is().map(|(_, _, p)| p).max();
+        return Position::between(max_p, None);
+    }
+
+    assert!(
+        idx < m.len(),
+        "index out of bounds ({idx} when length is {})",
+        m.len()
+    );
+
+    let ids = ids(m);
+    let pos_at_index = ids.get(idx).map(|(_, _, p)| *p);
+    let pos_at_previous_index = if idx == 0 {
+        None
+    } else {
+        Some(
+            ids.get(idx - 1)
+                .expect("we check for out-of-bounds above")
+                .2,
+        )
+    };
+    Position::between(pos_at_previous_index, pos_at_index)
+}
+
+fn uid_from_index<C>(m: &OrArray<C>, idx: usize) -> Uid {
+    ids(m)[idx].1
 }
 
 #[cfg(test)]
@@ -1706,6 +1804,339 @@ mod tests {
     }
 
     // TODO: test relocating an element
+
+    #[test]
+    fn insert_idx_register_at_head() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Insert first element at index 0
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+        assert_eq!(m.store.len(), 1);
+        assert_eq!(
+            m.store.value().unwrap().get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(10)))
+        );
+
+        // Insert at head (index 0) - should shift existing element
+        let delta = m
+            .store
+            .insert_idx_register(0, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+        assert_eq!(m.store.len(), 2);
+        assert_eq!(
+            m.store.value().unwrap().get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(20)))
+        );
+        assert_eq!(
+            m.store.value().unwrap().get(1).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(10)))
+        );
+    }
+
+    #[test]
+    fn insert_idx_register_at_middle() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Build array [10, 30]
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(1, MvRegValue::U64(30), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        // Insert 20 in middle (index 1) -> [10, 20, 30]
+        let delta = m
+            .store
+            .insert_idx_register(1, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 3);
+        let values = m.store.value().unwrap();
+        assert_eq!(
+            values.get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(10)))
+        );
+        assert_eq!(
+            values.get(1).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(20)))
+        );
+        assert_eq!(
+            values.get(2).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(30)))
+        );
+    }
+
+    #[test]
+    fn insert_idx_register_at_tail() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Build array [10, 20]
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(1, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        // Insert at tail (index 2) -> [10, 20, 30]
+        let delta = m
+            .store
+            .insert_idx_register(2, MvRegValue::U64(30), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 3);
+        assert_eq!(
+            m.store.value().unwrap().get(2).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(30)))
+        );
+    }
+
+    #[test]
+    fn insert_idx_register_beyond_len_clamps() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Insert at index 0
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        // Insert at index 100 (beyond len) - should clamp to len (1) and append
+        let delta = m
+            .store
+            .insert_idx_register(100, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 2);
+        let values = m.store.value().unwrap();
+        assert_eq!(
+            values.get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(10)))
+        );
+        assert_eq!(
+            values.get(1).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(20)))
+        );
+    }
+
+    #[test]
+    fn insert_idx_with_nested_map() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Insert a nested map at index 0
+        let delta = list.insert_idx_with(
+            0,
+            |cc, id| {
+                OrMap::<String, NoExtensionTypes>::default()
+                    .apply_to_register(
+                        |reg, cc, id| {
+                            reg.write(MvRegValue::String("test_value".to_string()), cc, id)
+                        },
+                        "test_key".to_string(),
+                        cc,
+                        id,
+                    )
+                    .map_store(Value::Map)
+            },
+            &cc,
+            id,
+        );
+        let m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        assert_eq!(m.store.len(), 1);
+        // Verify the nested map exists and is not bottom
+        let value = m.store.get(0).expect("should have element at index 0");
+        assert!(!value.map.is_bottom(), "map should not be bottom");
+        assert_eq!(
+            value
+                .map
+                .get(&"test_key".to_string())
+                .and_then(|v| v.reg.value().ok())
+                .cloned(),
+            Some(MvRegValue::String("test_value".to_string()))
+        );
+    }
+
+    #[test]
+    fn remove_at_head() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Build array [10, 20, 30]
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(1, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(2, MvRegValue::U64(30), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 3);
+
+        // Remove head -> [20, 30]
+        let delta = m.store.remove(0, &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 2);
+        let values = m.store.value().unwrap();
+        assert_eq!(
+            values.get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(20)))
+        );
+        assert_eq!(
+            values.get(1).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(30)))
+        );
+    }
+
+    #[test]
+    fn remove_at_middle() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Build array [10, 20, 30]
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(1, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(2, MvRegValue::U64(30), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        // Remove middle -> [10, 30]
+        let delta = m.store.remove(1, &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 2);
+        let values = m.store.value().unwrap();
+        assert_eq!(
+            values.get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(10)))
+        );
+        assert_eq!(
+            values.get(1).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(30)))
+        );
+    }
+
+    #[test]
+    fn remove_at_tail() {
+        use crate::sentinel::DummySentinel;
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Build array [10, 20, 30]
+        let delta = list.insert_idx_register(0, MvRegValue::U64(10), &cc, id);
+        let mut m = CausalDotStore {
+            store: list,
+            context: cc,
+        }
+        .join(delta, &mut DummySentinel)
+        .unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(1, MvRegValue::U64(20), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        let delta = m
+            .store
+            .insert_idx_register(2, MvRegValue::U64(30), &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        // Remove tail -> [10, 20]
+        let delta = m.store.remove(2, &m.context, id);
+        m = m.join(delta, &mut DummySentinel).unwrap();
+
+        assert_eq!(m.store.len(), 2);
+        let values = m.store.value().unwrap();
+        assert_eq!(
+            values.get(0).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(10)))
+        );
+        assert_eq!(
+            values.get(1).cloned(),
+            Some(CollapsedValue::Register(&MvRegValue::U64(20)))
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn remove_out_of_bounds_panics() {
+        let list = OrArray::default();
+        let cc = CausalContext::new();
+        let id = Identifier::new(0, 0);
+
+        // Try to remove from empty array - should panic
+        let _ = list.remove(0, &cc, id);
+    }
 
     #[quickcheck]
     fn order_invariant(ops: Ops<OrArray>, seed: u64) -> quickcheck::TestResult {

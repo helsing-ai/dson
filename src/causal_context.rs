@@ -911,10 +911,10 @@ impl CausalContext {
             (&self.dots, &other.dots)
         };
         for (k, ivals1) in smaller_dots {
-            if let Some(ivals2) = larger_dots.get(k) {
-                if ivals1.intersects(ivals2) {
-                    return true;
-                }
+            if let Some(ivals2) = larger_dots.get(k)
+                && ivals1.intersects(ivals2)
+            {
+                return true;
             }
         }
         false

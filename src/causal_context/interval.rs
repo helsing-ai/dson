@@ -591,11 +591,11 @@ impl IntervalSet {
                 }
                 (None, None) => break,
             };
-            if let Some(last) = result.0.last_mut() {
-                if let Some(merged) = last.merge(&next) {
-                    *last = merged;
-                    continue;
-                }
+            if let Some(last) = result.0.last_mut()
+                && let Some(merged) = last.merge(&next)
+            {
+                *last = merged;
+                continue;
             }
             result.0.push(next);
         }

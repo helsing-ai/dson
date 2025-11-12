@@ -1807,6 +1807,32 @@ where
     }
 }
 
+impl<K, C> CausalDotStore<crate::crdts::ormap::OrMap<K, C>>
+where
+    K: Hash + Eq + fmt::Debug + Clone,
+    C: crate::ExtensionType + Clone,
+{
+    /// Creates a new transaction for this store.
+    ///
+    /// The transaction exclusively borrows this store until committed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use dson::{CausalDotStore, Identifier, OrMap};
+    /// let mut store = CausalDotStore::<OrMap<String>>::default();
+    /// let id = Identifier::new(0, 0);
+    /// let tx = store.transact(id);
+    /// let delta = tx.commit();
+    /// ```
+    pub fn transact(
+        &mut self,
+        id: crate::Identifier,
+    ) -> crate::transaction::MapTransaction<'_, K, C> {
+        crate::transaction::MapTransaction::new(self, id)
+    }
+}
+
 #[cfg(any(test, feature = "arbitrary"))]
 pub mod recording_sentinel;
 
@@ -2655,5 +2681,14 @@ mod tests {
             assert_eq!(validator.added, BTreeMap::from([("dot1", 1), ("dot3", 2)]));
             assert_eq!(validator.removed, BTreeMap::from([("dot2", 1)]));
         }
+    }
+
+    #[test]
+    fn causal_dot_store_transact() {
+        use crate::{CausalDotStore, Identifier, OrMap};
+        let mut store = CausalDotStore::<OrMap<String>>::default();
+        let id = Identifier::new(0, 0);
+        let tx = store.transact(id);
+        let _delta = tx.commit();
     }
 }
