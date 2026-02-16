@@ -45,7 +45,7 @@ insta = "1.43.1"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
 rand = "0.9.0"
-tango-bench = "0.6"
+tango-bench = "0.7"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [build-dependencies]
