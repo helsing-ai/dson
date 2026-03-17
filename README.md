@@ -14,7 +14,7 @@ See also [Helsing's announcement blog post][blog-post].
 
 [dson-paper]: https://dl.acm.org/doi/10.14778/3510397.3510403
 [js-impl]: https://github.com/crdt-ibm-research/json-delta-crdt
-[blog-post]: https://blog.helsing.ai/dson-a-delta-state-crdt-for-resilient-peer-to-peer-communication-7823349a042c
+[blog-post]: https://blog.helsing.ai/posts/dson-a-delta-state-crdt-for-resilient-peer-to-peer-communication/
 
 ## Core Concepts
 
