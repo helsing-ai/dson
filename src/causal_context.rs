@@ -168,7 +168,7 @@ pub struct Identifier {
      * We expect that there should never be more than 4096 applications (12 bits) connected to a
      * single instance. If there is, it suggests a broken use pattern where applications are
      * constantly establishing new connections, which comes with its own set of problems and should
-     * be discouraged. We know that browsers sometime recycle connections, but even with occasional
+     * be discouraged. We know that browsers sometimes recycle connections, but even with occasional
      * recycling, 4k seems like a reasonable limit between "acceptable" and "something needs to
      * change".
      *
